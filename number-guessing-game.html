@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数当てゲーム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+            background-color: #f0f0f0;
+        }
+        .game-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        input[type="number"] {
+            padding: 10px;
+            font-size: 18px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            width: 100px;
+            margin: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .message {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .stats {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .difficulty-selector {
+            margin: 20px 0;
+        }
+        .difficulty-selector label {
+            margin: 0 10px;
+            font-weight: bold;
+        }
+        .hint-section {
+            margin: 15px 0;
+        }
+        .hint-btn {
+            background-color: #17a2b8;
+            font-size: 14px;
+            padding: 8px 16px;
+        }
+        .hint-btn:hover {
+            background-color: #138496;
+        }
+        .hint-btn:disabled {
+            background-color: #cccccc;
+        }
+        .high-score {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-weight: bold;
+            color: #856404;
+        }
+        .celebration {
+            animation: bounce 0.6s ease-in-out;
+        }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-10px); }
+            60% { transform: translateY(-5px); }
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>数当てゲーム</h1>
+        
+        <div class="difficulty-selector">
+            <label>難易度:</label>
+            <label><input type="radio" name="difficulty" value="easy" checked> 簡単 (1-50)</label>
+            <label><input type="radio" name="difficulty" value="medium"> 普通 (1-100)</label>
+            <label><input type="radio" name="difficulty" value="hard"> 難しい (1-500)</label>
+        </div>
+        
+        <p id="gameDescription">1から50までの数字を当ててください！</p>
+        
+        <div class="high-score" id="highScore" style="display: none;">
+            最高記録: <span id="bestScore">-</span>回
+        </div>
+        
+        <div>
+            <input type="number" id="guessInput" min="1" max="50" placeholder="数字を入力">
+            <button onclick="makeGuess()">予想する</button>
+            <button onclick="resetGame()">新しいゲーム</button>
+        </div>
+        
+        <div class="hint-section">
+            <button class="hint-btn" onclick="getHint()" id="hintBtn">ヒント (残り<span id="hintsLeft">3</span>回)</button>
+        </div>
+        
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div id="message"></div>
+        
+        <div class="stats">
+            <p>試行回数: <span id="attempts">0</span></p>
+            <p>これまでの予想: <span id="guessHistory"></span></p>
+            <p>総ゲーム数: <span id="totalGames">0</span></p>
+            <p>平均試行回数: <span id="averageAttempts">-</span></p>
+        </div>
+    </div>
+
+    <script>
+        let targetNumber;
+        let attempts = 0;
+        let guessHistory = [];
+        let gameOver = false;
+        let difficulty = 'easy';
+        let difficultySettings = {
+            easy: { min: 1, max: 50, description: '1から50まで' },
+            medium: { min: 1, max: 100, description: '1から100まで' },
+            hard: { min: 1, max: 500, description: '1から500まで' }
+        };
+        let hintsUsed = 0;
+        let maxHints = 3;
+        let gameStats = JSON.parse(localStorage.getItem('numberGameStats')) || {
+            totalGames: 0,
+            totalAttempts: 0,
+            bestScores: { easy: null, medium: null, hard: null }
+        };
+        
+        initializeGame();
+
+        function makeGuess() {
+            if (gameOver) return;
+            
+            const guessInput = document.getElementById('guessInput');
+            const guess = parseInt(guessInput.value);
+            const messageDiv = document.getElementById('message');
+            const settings = difficultySettings[difficulty];
+            
+            if (isNaN(guess) || guess < settings.min || guess > settings.max) {
+                showMessage(`${settings.description}の数字を入力してください！`, 'error');
+                return;
+            }
+            
+            attempts++;
+            guessHistory.push(guess);
+            updateStats();
+            updateProgress();
+            
+            if (guess === targetNumber) {
+                gameOver = true;
+                guessInput.disabled = true;
+                document.getElementById('hintBtn').disabled = true;
+                
+                let message = `正解！ ${attempts}回で当てました！`;
+                if (isNewRecord()) {
+                    message += ' 🎉 新記録です！';
+                    document.querySelector('.game-container').classList.add('celebration');
+                    setTimeout(() => {
+                        document.querySelector('.game-container').classList.remove('celebration');
+                    }, 600);
+                }
+                
+                showMessage(message, 'success');
+                updateGameStats();
+            } else if (guess < targetNumber) {
+                const diff = targetNumber - guess;
+                let hint = 'もっと大きい数字です！';
+                if (diff <= 5) hint += ' (とても近い！)';
+                else if (diff <= 10) hint += ' (近い！)';
+                showMessage(hint, 'info');
+            } else {
+                const diff = guess - targetNumber;
+                let hint = 'もっと小さい数字です！';
+                if (diff <= 5) hint += ' (とても近い！)';
+                else if (diff <= 10) hint += ' (近い！)';
+                showMessage(hint, 'info');
+            }
+            
+            guessInput.value = '';
+            guessInput.focus();
+        }
+
+        function showMessage(text, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+        }
+
+        function updateStats() {
+            document.getElementById('attempts').textContent = attempts;
+            document.getElementById('guessHistory').textContent = guessHistory.join(', ');
+            document.getElementById('totalGames').textContent = gameStats.totalGames;
+            const avgAttempts = gameStats.totalGames > 0 ? (gameStats.totalAttempts / gameStats.totalGames).toFixed(1) : '-';
+            document.getElementById('averageAttempts').textContent = avgAttempts;
+        }
+
+        function resetGame() {
+            const selectedDifficulty = document.querySelector('input[name="difficulty"]:checked').value;
+            if (selectedDifficulty !== difficulty) {
+                difficulty = selectedDifficulty;
+                updateDifficultyUI();
+            }
+            
+            const settings = difficultySettings[difficulty];
+            targetNumber = Math.floor(Math.random() * (settings.max - settings.min + 1)) + settings.min;
+            attempts = 0;
+            guessHistory = [];
+            gameOver = false;
+            hintsUsed = 0;
+            
+            document.getElementById('guessInput').disabled = false;
+            document.getElementById('guessInput').value = '';
+            document.getElementById('message').textContent = '';
+            document.getElementById('message').className = '';
+            document.getElementById('hintBtn').disabled = false;
+            document.getElementById('hintsLeft').textContent = maxHints - hintsUsed;
+            document.getElementById('progressFill').style.width = '0%';
+            
+            updateStats();
+            updateHighScore();
+            
+            document.getElementById('guessInput').focus();
+        }
+
+        document.getElementById('guessInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                makeGuess();
+            }
+        });
+
+        function initializeGame() {
+            updateDifficultyUI();
+            resetGame();
+            updateHighScore();
+            updateGameStats();
+            
+            document.querySelectorAll('input[name="difficulty"]').forEach(radio => {
+                radio.addEventListener('change', resetGame);
+            });
+        }
+        
+        function updateDifficultyUI() {
+            const settings = difficultySettings[difficulty];
+            document.getElementById('gameDescription').textContent = `${settings.description}の数字を当ててください！`;
+            document.getElementById('guessInput').min = settings.min;
+            document.getElementById('guessInput').max = settings.max;
+            document.getElementById('guessInput').placeholder = `${settings.min}-${settings.max}`;
+        }
+        
+        function getHint() {
+            if (hintsUsed >= maxHints || gameOver) return;
+            
+            hintsUsed++;
+            document.getElementById('hintsLeft').textContent = maxHints - hintsUsed;
+            
+            if (hintsUsed >= maxHints) {
+                document.getElementById('hintBtn').disabled = true;
+            }
+            
+            const settings = difficultySettings[difficulty];
+            const range = settings.max - settings.min + 1;
+            const quarterSize = Math.floor(range / 4);
+            
+            let hintMessage = '';
+            if (targetNumber <= settings.min + quarterSize) {
+                hintMessage = `ヒント: 答えは比較的小さい数字です (${settings.min}-${settings.min + quarterSize}の範囲)`;
+            } else if (targetNumber <= settings.min + quarterSize * 2) {
+                hintMessage = `ヒント: 答えは中央より小さい数字です (${settings.min + quarterSize + 1}-${settings.min + quarterSize * 2}の範囲)`;
+            } else if (targetNumber <= settings.min + quarterSize * 3) {
+                hintMessage = `ヒント: 答えは中央より大きい数字です (${settings.min + quarterSize * 2 + 1}-${settings.min + quarterSize * 3}の範囲)`;
+            } else {
+                hintMessage = `ヒント: 答えは比較的大きい数字です (${settings.min + quarterSize * 3 + 1}-${settings.max}の範囲)`;
+            }
+            
+            showMessage(hintMessage, 'info');
+        }
+        
+        function updateProgress() {
+            const settings = difficultySettings[difficulty];
+            const maxAttempts = Math.ceil(Math.log2(settings.max - settings.min + 1)) + 3;
+            const progress = Math.min((attempts / maxAttempts) * 100, 100);
+            document.getElementById('progressFill').style.width = progress + '%';
+        }
+        
+        function isNewRecord() {
+            const currentBest = gameStats.bestScores[difficulty];
+            return currentBest === null || attempts < currentBest;
+        }
+        
+        function updateGameStats() {
+            if (gameOver) {
+                gameStats.totalGames++;
+                gameStats.totalAttempts += attempts;
+                
+                if (isNewRecord()) {
+                    gameStats.bestScores[difficulty] = attempts;
+                }
+                
+                localStorage.setItem('numberGameStats', JSON.stringify(gameStats));
+            }
+            updateHighScore();
+            
+            document.getElementById('totalGames').textContent = gameStats.totalGames;
+            const avgAttempts = gameStats.totalGames > 0 ? (gameStats.totalAttempts / gameStats.totalGames).toFixed(1) : '-';
+            document.getElementById('averageAttempts').textContent = avgAttempts;
+        }
+        
+        function updateHighScore() {
+            const bestScore = gameStats.bestScores[difficulty];
+            const highScoreDiv = document.getElementById('highScore');
+            
+            if (bestScore !== null) {
+                document.getElementById('bestScore').textContent = bestScore;
+                highScoreDiv.style.display = 'block';
+            } else {
+                highScoreDiv.style.display = 'none';
+            }
+        }
+        
+        window.onload = function() {
+            document.getElementById('guessInput').focus();
+        };
+    </script>
+</body>
+</html>
